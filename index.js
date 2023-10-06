@@ -5,8 +5,15 @@ const ytdl = require('ytdl-core');
 const fs = require('fs');
 const ffmpeg = require("ffmpeg-static");
 const archiver = require('archiver');
-const { error } = require("console");
+const fsextra = require('fs-extra');
+const cors = require('cors');
 
+//los middleware permite la seguridad al enviar datos
+//app.use(express.json());
+//app.use(express.urlencoded({extended:true}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cors());
 let pathfolder = '';
 let pathzip = '';
 //crea una carpeta random
@@ -30,62 +37,46 @@ function Createfolder()
   })
 
 }
-function createfolder(res)
+//comprimir en un zip
+function compresszip(res)
 {
-  //generar el nombre de la carpeta
-  const banco="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let namerandom = "";
-  let longitud = 5;
-  let folderpath ="",namezip = "";
-  for (let i = 0; i < longitud; i++) {
-      namerandom+=banco[Math.round(Math.random()*(banco.length-1))];
-  }
-  folderpath= `src/${namerandom}`;
-
-  //crear carpera
-  fs.mkdir(folderpath,{recursive:true},(error)=>{
-    if(error)
-    {
-      var error = "Error al crear carpeta"
-      return error;
-    }
-  });
+ 
+  console.log(pathfolder+"comprimiendo");
   //crear archivo zip
-  namezip = `src/${namerandom}.zip`;
+  namezip = `${pathfolder}.zip`;
   const zip = fs.createWriteStream(namezip) ;
   const archive = archiver('zip',{
     zlib:{level:9} // el nivel de comprension
   })
-  
   //escribir archivo zip
   archive.pipe(zip);
   //insertar archivos al zip
-  fs.readdirSync('src/pp').map((file)=>{
-    const pathfile = `src/pp/${file}`;
-    
-    console.log(pathfile);
+  fs.readdirSync(pathfolder).map((file)=>{
+    const pathfile = `${pathfolder}/${file}`;
+   // console.log(pathfile+"---");
+  
     archive.file(pathfile,{name:file});
   })
   archive.finalize();
   //proceso de finalizar el envio de file al zip
+
   zip.on('close',()=>{
 
     console.log('cargado completo');
     //procesos de descargar con el attachment
     res.attachment(namezip);
-    res.on('finish',()=>{
+    res.on('finish',async()=>{
       fs.unlinkSync(namezip);
-      fs.rmdirSync(folderpath);
+      //remover carpeta que tiene archivos
+      await fsextra.remove(pathfolder);
       console.log("termino la descarga");
     })
     res.download(namezip);
+   // res.send("completo");
   })
- 
-
- 
-  
 }
 const downloadmusic = async (folder,url)=>{
+
 
   async function gettitle(url)
   {
@@ -93,7 +84,8 @@ const downloadmusic = async (folder,url)=>{
       var info = await ytdl.getInfo(url);
       var title = info.videoDetails.title;
       console.log(`Descargando ${title}`);
-      return title;
+
+      return  title.replace(/[^\w\s]/gi, "");
     } catch (error) {
       console.error('Error al obtener el título del video:', error);
     }
@@ -102,47 +94,79 @@ const downloadmusic = async (folder,url)=>{
   const title = await gettitle(url);
   const stream = ytdl(url,{filter:'audioonly'}).pipe(fs.createWriteStream(`${folder}/${title}.mp4`))
 
-  stream.on('finish', ()=>{
-    const process = require('child_process').spawn(
-      ffmpeg,
-      [
-        '-i', `${folder}/${title}.mp4`,
-        '-vn', '-ab', '128k',
-        '-y', `${folder}/${title}.mp3`
-      ]
-    );
 
-    process.on('close', () => {
-     fs.unlinkSync( `${folder}/${title}.mp4`);
-      console.log('Download finished');
-    });
+  return new Promise((resolve,reject)=>{
+    //transformar de video a audio
+    stream.on('finish', ()=>{
+      const process = require('child_process').spawn(
+        ffmpeg,
+        [
+          '-i', `${folder}/${title}.mp4`,
+          '-vn', '-ab', '256k',//128k 64k 192k 256k 320k
+          '-y', `${folder}/${title}.mp3`
+        ]
+      );
+  
+      process.on('close', () => {
+       fs.unlinkSync( `${folder}/${title}.mp4`);
+        console.log('Download finished');
+        resolve();
+      });
+    })
   })
+
  
 }
+const getdetailmusic = async (url)=>{
+  var detailmusic = {
+    URL:'',
+    title:'',
+    thumbnail:''
+  }
+  try {
+    console.log('cargando musica');
+    var info = await ytdl.getInfo(url);
+ 
+    detailmusic.URL = url;
+    detailmusic.title =  info.videoDetails.title;
+    detailmusic.thumbnail = info.videoDetails.thumbnails[0].url;
+   // console.log(detailmusic);
+    return detailmusic;
+    //return detailmusic;
+  } catch (error) {
+    return {error:'No se reconoce la musica'};
+    console.log('Error al obtener los detalles')
+  }
+}
 
-app.get('/youtu',(req, res)=>{
- //  createfolder(res);
- //createfolder(res);
-   //res.download(createfolder());
-  
-  Createfolder();
+app.post('/detailmusic',async(req,res)=>{
+console.log(req.body.length);
+/*const urls = ['https://www.youtube.com/watch?v=of9UbUpMrZA',
+  'https://www.youtube.com/watch?v=TOBGbDtbaTw',
+  'https://www.youtube.com/watch?v=faOAF5M6DH4'
+];*/
+var url = req.body.url;
+var requestmusic = await getdetailmusic(url);
+const data = {
+  data :requestmusic,
+}
 
-  const Listurl = ['https://www.youtube.com/watch?v=QM-y0-DLJnw'
-                ]
-  Listurl.map((item)=>{
-    downloadmusic(pathfolder,item)
-  })
-  
-  res.send("Se descargo");
- /* Listurl.map((e)=>{
-   // console.log(e);
-    downloadmusic(e);
-  
-    var a = "prueba";*/
-   
+res.json(data);
+
+ 
 });
+app.post('/youtu',async (req, res)=>{
+  Createfolder();
+  const Listurl = req.body.urls;
+  for(const item of Listurl)
+  {
+    await downloadmusic(pathfolder,item);
+  }
+  compresszip(res);
+});
+const PORT = process.env.PORT ?? 9000
 //por  defaould manda el
 app.use(express.static(path.join(__dirname,'public')))
-const server = app.listen(9000,()=>{
+const server = app.listen(PORT,()=>{
     console.log("El puerto esta corriendo")
 })
