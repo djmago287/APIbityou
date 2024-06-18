@@ -166,7 +166,7 @@ app.post('/youtu',async (req, res)=>{
 });
 const PORT = process.env.PORT ?? 9000
 //por  defaould manda el
-app.use(express.static(path.join(__dirname,'public')))
+//app.use(express.static(path.join(__dirname,'public')))
 const server = app.listen(PORT,()=>{
-    console.log("El puerto esta corriendo")
+    console.log("El puerto esta corriendo"+PORT)
 })
