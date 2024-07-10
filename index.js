@@ -1,7 +1,7 @@
 const express = require("express");
 const path  = require('path');
 const  app = express();
-const ytdl = require('ytdl-core');
+const ytdl = require('@distube/ytdl-core');
 const fs = require('fs');
 const ffmpeg = require("ffmpeg-static");
 const archiver = require('archiver');
@@ -92,12 +92,15 @@ const downloadmusic = async (folder,url)=>{
   }
   
   const title = await gettitle(url);
-  const stream = ytdl(url,{filter:'audioonly'}).pipe(fs.createWriteStream(`${folder}/${title}.mp4`))
+
+const stream =  ytdl(url,{filter:'audioonly'}).pipe(fs.createWriteStream(`${folder}/${title}.mp4`))
 
 
   return new Promise((resolve,reject)=>{
     //transformar de video a audio
+    console.log("tranformandode mp4 a mp3"+ title);
     stream.on('finish', ()=>{
+     
       const process = require('child_process').spawn(
         ffmpeg,
         [
@@ -140,13 +143,14 @@ const getdetailmusic = async (url)=>{
 }
 
 app.post('/detailmusic',async(req,res)=>{
-console.log(req.body.length);
+//console.log(req.body.length);
 /*const urls = ['https://www.youtube.com/watch?v=of9UbUpMrZA',
   'https://www.youtube.com/watch?v=TOBGbDtbaTw',
   'https://www.youtube.com/watch?v=faOAF5M6DH4'
 ];*/
 var url = req.body.url;
 var requestmusic = await getdetailmusic(url);
+console.log(requestmusic);
 const data = {
   data :requestmusic,
 }
@@ -162,7 +166,7 @@ app.post('/youtu',async (req, res)=>{
   {
     await downloadmusic(pathfolder,item);
   }
-  compresszip(res);
+ compresszip(res);
 });
 const PORT = process.env.PORT ?? 9000
 //por  default manda el
